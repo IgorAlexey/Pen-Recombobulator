@@ -4,8 +4,6 @@ using System.Runtime.CompilerServices;
 using OpenTabletDriver.Plugin.Attributes;
 using OpenTabletDriver.Plugin.Tablet;
 using OpenTabletDriver.Plugin.Output;
-using OpenTabletDriver.Plugin.DependencyInjection;
-using OpenTabletDriver.Plugin;
 
 namespace Recombobulator;
 
@@ -18,7 +16,7 @@ public class PenRecombobulator : IPositionedPipelineElement<IDeviceReport>
     private uint _lastPressure;
     private bool _penDown;
 
-    [Property("Invert Pressure")]
+    [BooleanProperty("Invert Pressure", "")]
     [DefaultPropertyValue(true)]
     public bool InvertPressure { get; set; } = true;
 
@@ -66,29 +64,26 @@ public class PenRecombobulator : IPositionedPipelineElement<IDeviceReport>
 
     public void Consume(IDeviceReport deviceReport)
     {
-        // switch statement for jump table?
-        switch (deviceReport)
+        if (deviceReport is ITiltReport tiltReport)
         {
-            case ITabletReport report:
-                bool penCurrentlyDown = report.Pressure > 0;
-                if (penCurrentlyDown != _penDown)
-                {
-                    _penDown = penCurrentlyDown;
-                    _initialReportCount = 0;
-                    _lastPressure = InvertPressure ? MaxPressure : 0;
-                }
-                report.Pressure = ProcessPressure(report.Pressure);
-                Emit?.Invoke(report);
-                break;
-
-            case ITiltReport tiltReport:
-                tiltReport.Tilt = ProcessTilt(tiltReport.Tilt);
-                Emit?.Invoke(tiltReport);
-                break;
-
-            default:
-                Emit?.Invoke(deviceReport); // pass thru other report types
-                break;
+            tiltReport.Tilt = ProcessTilt(tiltReport.Tilt);
+            deviceReport = tiltReport;
         }
+
+        if (deviceReport is ITabletReport tabletReport)
+        {
+            bool penCurrentlyDown = tabletReport.Pressure > 0;
+            if (penCurrentlyDown != _penDown)
+            {
+                _penDown = penCurrentlyDown;
+                _initialReportCount = 0;
+                _lastPressure = InvertPressure ? MaxPressure : 0;
+            }
+            tabletReport.Pressure = ProcessPressure(tabletReport.Pressure);
+            deviceReport = tabletReport;
+        }
+
+        Emit?.Invoke(deviceReport);
     }
+
 }
